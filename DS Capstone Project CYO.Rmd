@@ -1,0 +1,517 @@
+---
+title: "Data Science Capstone Project CYO"
+author: "Muhammad Ameer Hamza"
+date: "4/19/2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# Introduction
+
+Heart disease is one of the most common and widespread diseases in the world. According to the estimate of World Health Organization twelve million deaths occur world wide due to heart diseases. Half the deaths in the United States and other developed countries are due to cardio vascular diseasesThe early prognosis of cardiovascular diseases can aid in making decisions on lifestyle changes in high risk patients and in turn reduce the complications. This research intends to pinpoint the most relevant/risk factors of heart disease as well as predict the overall risk
+
+Some attempts will be made to find out whether there is a 
+machine learning technique that identifies those patients who are more likely to be diagnoed with coronary heart disease in next ten years.
+
+# Overview
+
+
+
+## Data set:
+
+The dataset is publically available on the Kaggle website, and it is from an ongoing cardiovascular study on residents of the town of Framingham, Massachusetts. The classification goal is to predict whether the patient has 10-year risk of future coronary heart disease (CHD).The dataset provides the patients’ information. It includes over 4,000 records and 15 attributes.
+Each attribute is a potential risk factor. 
+
+## Variables:
+
+Following is an overview of the variables used and method used:
+
+- framingham : original dataset as available on Kaggle
+
+- fullData: data frame used for analysis. It is derived from framingham after removal of NAs and columns not required.
+
+- test: data frame to check accuracy of the models
+
+- train: data frame to train models.
+
+## Method:
+
+After division into test and train data frames, we will be analysing all the potential risk factors one after another to generate insights of the data.
+Once insights are generated, following machine learning models will used to generate confusin matrices which will then be compared:
+
+- Naive Bayes
+- Linear Classifier
+- Logistic Regression
+- K-Nearest Neighbours
+- Random Forest
+
+
+# Data Analysis:
+
+
+## Workspace
+
+First we are going to download the libraries that will be used:
+
+
+```{r libraries}
+
+#Downloading libraries#
+
+if(!require(tidyverse)) install.packages("tidyverse", repos = "http://cran.us.r-project.org")
+if(!require(caret)) install.packages("caret",repos = "http://cran.us.r-project.org")
+if(!require(dplyr)) install.packages("dplyr",repos = "http://cran.us.r-project.org")
+if(!require(RCurl)) install.packages("RCurl",repos = "http://cran.us.r-project.org")
+
+
+# Loading libraries#
+
+library(caret)
+library(tidyverse)
+library(dplyr)
+library(RCurl)
+```
+# Data Exploration
+
+
+## Downloading and Splitting the Data
+
+The first step is to download the data and import it into a data frame.
+The csv file is linked from a github repository. Follwing chunk of code will download the csv file and import into a data frame.
+
+
+
+``````{r import-file}
+x <- getURL("https://raw.githubusercontent.com/mhmdamrhamza/dscapstoneharvardxcyo/master/framingham.csv")
+framingham <- read.csv(text = x)
+```
+
+
+## Cleansing the Data
+
+To perform analysis correctly, some adjustments are made:
+
+- The data contains education and Smoking column. These columns are removed as education is not a potential risk factor. Also, smoking column has values 1 for smoker and 0 for non-smokers. Rather than using this column we will be using cigsperday column which has better input and easier to process.
+
+- Male column has entries 1 for males and 0 for females. We will be adding sex column having factors male and female
+
+- All rows with NA values will be removed to execute analysis without any errors.
+
+- TenYearCHD is set as parameter to evaluate performance.
+
+```{r data cleansing}
+
+#removing education and smoking column#
+
+fullData <- framingham[,-c(3,4)]
+
+#adding sex column#
+
+fullData$sex <- ifelse(fullData$male == 1, "male", "female")
+
+#removing rows with NA values in any of the columns#
+
+fullData <- subset(fullData, complete.cases(fullData))
+
+
+#defining result parameter#
+
+fullData <- fullData %>% 
+  mutate(TenYearCHD = as.character(TenYearCHD)) %>% 
+  mutate(TenYearCHD = replace(TenYearCHD, TenYearCHD == '0', 'No')) %>%
+  mutate(TenYearCHD = replace(TenYearCHD, TenYearCHD == '1', 'Yes')) %>%
+  mutate(TenYearCHD = as.factor(TenYearCHD))
+```
+
+
+
+Next, the data is divided into test and train sets:
+
+```{r test-train}
+
+#generating test and train sets#
+
+set.seed(1)
+trainIndex <- createDataPartition(fullData$TenYearCHD, p=.7, list=FALSE)
+train <- fullData[trainIndex,]
+test <- fullData[-trainIndex,]
+```
+ 
+To have an idea of the outcomes we will list down the number of positive and negative outcomes: 
+ 
+```{r, echo = FALSE}
+
+#summary of dataet#
+
+fullData %>%
+count(TenYearCHD)
+```
+
+As it is clear that number of negative outcomes is significantly greater, we will be focusing more on the patterns of each risk factor.
+
+ 
+## Exploration of each potential risk factor
+
+
+### Age
+
+Age is on of the most important potential risk factor for majority of the diseases:
+
+```{r exploration-age}
+
+train %>% 
+  ggplot(aes(x = age)) + 
+    geom_histogram(binwidth = 20) + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+The graph shows age has a direct impact on the risk of the diseases. For group wtih negative outcome (TenYearCHD = No) higher age group has less count implying that aged people have more chances of heart disease. For other group, the distribution is different implying the same outcome.
+
+### Sex
+
+```{r eploration-sex}
+train %>% 
+  ggplot(aes(x = sex)) + 
+    geom_bar() + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+It seems that women appear less frequently in positive outcome groups and more frequently in negative outcome group. Both these observations imply that women are less likely to be tested positive in ten years.
+
+### Smoking
+
+Heart dieseases are the second most known disease attributed with the smoking after lungs disorder:
+
+```{r eploration-smoking}
+train %>% 
+  ggplot(aes(x = cigsPerDay)) + 
+    geom_histogram(binwidth = 5, color = "white") + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+Not surprisingly in both conditions, people with more number of cigerettes per day are associated with the risk more as compared to those who smoked small number of cigeretts or no cigerettes at all.
+
+### Diabetes
+
+
+```{r eploration-diabetes}
+
+train %>% 
+  ggplot(aes(x = diabetes)) + 
+    geom_histogram(binwidth = 0.5) + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+Since value in diabetes column is 0 for no and 1 for yes, high count of zero in outcome 'no' column shows that people with diabetes are more likely to have heart disease in ten years. Same is the observation for outcome 'yes' i.e. count of people having diabetes and associated to high chance of heart disease is high.
+
+### Cholestrol
+
+
+```{r eploration-Cholestrol}
+train %>% 
+  ggplot(aes(x = totChol)) + 
+    geom_histogram(binwidth = 100, color = "white") + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+Both groups of people follow same pattern although difference cholestrol value for 'outcome = yes ' group is higher.
+
+### Systolic Bloodpressure:
+
+```{r eploration-sysBP}
+train %>% 
+  ggplot(aes(x = sysBP)) + 
+    geom_histogram(binwidth = 10, color = "white") + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+The distribution is skewed left and have similar patterns for both outcome groups.
+
+### Diastolic Blood Pressure 
+
+```{r eploration-diaBP}
+train %>% 
+  ggplot(aes(x = diaBP)) + 
+    geom_histogram(binwidth = 5, color = "white") + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+Once again both outcome groups have same same distribution and no significant effect of the parameter is observed.
+
+### BMI:
+
+Body mass index is a measure of obesity. A BMI value of more than 30 means the person is obese. Obesity is widely associated with heart diseases:
+
+```{r exploration-BMI}
+train %>% 
+  ggplot(aes(x = BMI)) + 
+    geom_histogram(binwidth = 5, color = "white") +
+  scale_x_discrete(limits = c(seq(20,40,5))) +
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+Persons with BMI around twenty-five has the most chances of being diagnosed with
+the heart disease. This needs to be explored more.
+
+### HeartRate:
+
+```{r eploration-heartrate}
+train %>% 
+  ggplot(aes(x = heartRate)) + 
+    geom_histogram(binwidth = 5, color = "white") + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+Once again, normal distribution is observed in the both outcome sets.
+
+### Glucose
+
+```{r eploration-glucose}
+train %>% 
+  ggplot(aes(x = glucose)) + 
+    geom_histogram(binwidth = 5, color = "white")  +
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+Both sets show similar distribution indicating that glucose might not have too significant effect on the prediction.
+
+Clearly there are outliers in the data as well which we will be removing in the coming part.
+
+# Data Preparation
+
+From the description of the data above it is evident that some predictors are most likely correlated for example usually for a patient both kinds of blood pressure are equally varied. By excluding categorical columns we can quickly find correleations as follows:
+
+```{r desc-cor}
+options(digits = 5)
+cor(subset(train, select = -c(sex, TenYearCHD,male,age)))
+```
+
+from the data above, the parameters with high correlated predictors are:
+
+- sysBP and diaBP
+
+
+```{r sysBP-diaBP-cor}
+train %>% 
+  ggplot(aes(x = sysBP, y = diaBP, color = prevalentHyp, shape = TenYearCHD,  )) + 
+    geom_point() + 
+    theme_minimal() +
+    facet_grid(~ TenYearCHD)
+```
+
+Both groups have same correlation with outliers in the similar range. For this reason one of the parameter can be omitted from our model.
+
+
+ 
+```{r drop-sysBP}
+train <- train %>% subset(select = -c(sysBP))
+test <- test %>% subset(select = -c(sysBP))
+```
+
+# Machine Learning Methods
+
+For developing machine learning models, there are some signs of correlations. The aim of this project is to correctly predict the diagnoses outcome for the people. 
+
+Sensitivity (the proportion of patients who were in the disease group correctly identified) and specificity (the proportion of actual negatives, which are healthypatients, identified as such) are the two other parameters which can be used to assess the accuracy of the model.
+
+We are going to save results after each model to allow comparisons:
+
+
+```{r setup-storage}
+results <- data.frame(Model = character(), 
+                      Accuracy = double(), 
+                      Sensitivity = double(), 
+                      Specificity = double(), 
+                      stringsAsFactors = FALSE)
+```
+
+
+## Naive Bayes
+
+Naive Bayes is one of the most common models. It assumes This
+calculates a series of conditional probabilities, and the probabilities of
+each possible outcome.
+
+```{r nb-train, info=FALSE, warning=FALSE}
+nb_model = train(TenYearCHD ~ ., data = train, method = "nb")
+predictions = predict(nb_model, newdata = test)
+confusionMatrix <- confusionMatrix(predictions, test$TenYearCHD)
+results[nrow(results) + 1, ] <- c(as.character('Naive Bayes (nb)'), 
+                                  confusionMatrix$overall['Accuracy'],  
+                                  confusionMatrix$byClass['Sensitivity'], 
+                                  confusionMatrix$byClass['Specificity'])
+rm(nb_model, predictions)
+confusionMatrix
+```
+
+## Linear Classifier
+
+
+```{r linc-train, info=FALSE, warning=FALSE}
+lc_model = train(TenYearCHD ~ ., data = train, method = "glmboost")
+predictions = predict(lc_model, newdata = test)
+confusionMatrix <- confusionMatrix(predictions, test$TenYearCHD)
+results[nrow(results) + 1, ] <- c(as.character('Linear Classifier (glmboost)'), 
+                                  confusionMatrix$overall['Accuracy'],  
+                                  confusionMatrix$byClass['Sensitivity'], 
+                                  confusionMatrix$byClass['Specificity'])
+rm(lc_model, predictions)
+confusionMatrix
+```
+
+Although it has almost the same accuracy as Naive Bayes model, the confusion marix also shows a significant number of patients predicted yes when they are no.
+
+Here, the sensitivity (the number of patients correctly identified) was 
+close to 1 (which would otherwise be excellent), but the sensitivity 
+(those without the disease categorised as such) was close to zero.
+
+In healthcare systems it is an error to predict care for a patient when it is not required.
+
+The other problem is that in these data, the group with negative outcome are
+larger than the those preicted 'yes'. This gives the unusually large accuracy metric.
+
+
+## Logistic Regression
+
+
+Logistic regression is another very common machine learning approach . Using the Bayesian Generalized Linear Model, and including the actual
+prevalence in the confusion matrix we can generate results as follows:
+
+
+```{r lr-train, info=FALSE, warning=FALSE}
+lr_model = train(TenYearCHD ~ ., data = train, method = "bayesglm")
+predictions = predict(lr_model, newdata = test)
+confusionMatrix <- confusionMatrix(predictions, test$TenYearCHD, prevalence = 0.06)
+results[nrow(results) + 1, ] <- c(as.character('Logistic Regression (bayesglm)'), 
+                                  confusionMatrix$overall['Accuracy'],  
+                                  confusionMatrix$byClass['Sensitivity'], 
+                                  confusionMatrix$byClass['Specificity'])
+rm(lr_model, predictions)
+confusionMatrix
+```
+
+This shows a further improvement. The PPV of 0.06 is lower, but the 
+NPV of 0.99 represents a far larger group of patients
+
+
+## K-Nearest Neighbours
+
+The next method to consider is the "Nearest Neighbours", here the 
+K-nearest neighbours. This will find the k closest matching points from
+the training data. These will have their results averaged to find the
+predicted outcome.
+
+This is a powerful idea, as the nearest neighbours to any patient will
+be patients with similar profiles (demographics and blood results), so
+may be more likely to have the same outcome.
+
+The value of K is a tuning parameter, and the following code will 
+attempt to find the most appropriate value.
+
+
+```{r knn-train, info=FALSE, warning=FALSE}
+knn_model = train(TenYearCHD ~ ., data = train, method = "knn", preProcess=c('knnImpute'))
+knn_model
+```
+The value of 9 is settled on here. It's worth noting that in 
+a more widespread deployment, where more pleniful training data 
+are available, this could be different.
+
+```{r knn-predict}
+predictions = predict(knn_model, newdata = test)
+confusionMatrix <- confusionMatrix(predictions, test$TenYearCHD, prevalence = 0.06)
+results[nrow(results) + 1, ] <- c(as.character('K-nearest neighbours (knn)'), 
+                                  confusionMatrix$overall['Accuracy'],  
+                                  confusionMatrix$byClass['Sensitivity'], 
+                                  confusionMatrix$byClass['Specificity'])
+rm(knn_model, predictions)
+confusionMatrix
+```
+Despite a more realistic range of predictions, there is no 
+improvement to the accuracies, sensitivity or specificity.
+
+## Random Forest
+
+The final tested approach is a random forest. This will create a 
+"forest" of randomly chosen decision trees, which result in a 
+classification.
+
+The results of these trees will then be compared, and the best 
+performing tree selected.
+
+
+```{r rf-train, info=FALSE, warning=FALSE}
+rf_model = train(TenYearCHD ~ ., data = train, method = "rf")
+predictions = predict(rf_model, newdata = test)
+confusionMatrix <- confusionMatrix(predictions, test$TenYearCHD, prevalence = 0.06)
+results[nrow(results) + 1, ] <- c(as.character('Random Forest (rf)'), 
+                                  confusionMatrix$overall['Accuracy'],  
+                                  confusionMatrix$byClass['Sensitivity'], 
+                                  confusionMatrix$byClass['Specificity'])
+rm(rf_model, predictions)
+confusionMatrix
+```
+```{r cleanup-cm}
+rm(confusionMatrix)
+```
+
+# Results
+
+```{r print-results}
+options(digits = 5)
+results %>% arrange(Accuracy)
+```
+
+
+
+As we have a table of the all the methods used and their outcomes, a good practice is to consider the positives and the negatives of each combination of the results:
+
+Models that are highly sensitive, but less specific (the linear 
+classifier, logistic regression and k-nearest neighbours) would mean patients
+are very likely to be flagged correctly however many patients who do not have significant risk will also be flagged.
+
+Models with high speficicity but low sensitivity (none of these models 
+behaved this way) would be good for identifying patients who are very likely
+to be suffering with the coronary heart disease. A 'hit' on a tool like this would indicate that the patient is almost certainly in the group with high chance of heart disease diagnosed in ten years.
+
+Models (like Naive Bayes), which perform well in both sensitivity and 
+specificty provide a compromise. Not all patients will be spotted correctly , but there will be fewer patients missed who may otherwise be flagged.
+
+
+# Conclusion
+
+
+
+Considering all parameters carefully, it can be deduced that no model has clear superiority in terms pf perfect combination.
+
+
+It is possible that KNN would most likely improve in performance a little with a larger training data set.
+
+Since the idea of this project was to aid analysis of blood results, but not 
+replace the role of the physician in that process, a combination of high
+sensitivity and low specificity might be useful. It will lead to many 
+patients being highlighted unnecessarily, but will allow a doctor to quickly
+note that the blood results (and wider patient presentation) need attention 
+with regard to their liver. 
+
+As the idea of the project is to flag the patients by aiding in analysis a combination of highsensitivity and low specificity might be useful.It will lead to many patients being highlighted unnecessarily, but will allow a doctor and the person in consideration to quicklynote that person need attention with regard to their heart.
+
+Despite this, there is a risk that, especially in public-sector healthcare 
+systems, this could be a huge increase in workload for clinicians, who would
+need to review significant numbers of patients who have no illness, no symptoms
+and no significant benefit from specialist care.
+
+There is also a risk of 'alert fatigue', where doctors get so used to seeing a
+warning marker that a patient may need specialist care that they begin 
+ignoring the warnings altogether.
+
+For this reason, the Naive Bayes approach, using the `nb` method of the `caret`
+package, appears to offer the best combination of accuracy, sensitivity and 
+specificity.
